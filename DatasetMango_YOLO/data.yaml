@@ -1,0 +1,6 @@
+train: DatasetMango_YOLO/train/images
+val:   DatasetMango_YOLO/valid/images
+test:  DatasetMango_YOLO/test/images
+
+nc: 5
+names: ['Saludable', 'Antracnosis', 'Cancro_bacteriano', 'Costras', 'Podredumbre_Extremo_tallo']
