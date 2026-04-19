@@ -42,7 +42,7 @@ def main() -> int:
         print("ERROR: instalar dependencias primero (pip install -r requirements.txt)")
         return 1
 
-    DATASET_DETECTOR_DIR.mkdir(parents=True, exist_ok=True)
+    DATASET_DETECTOR_DIR.parent.mkdir(parents=True, exist_ok=True)
 
     rf = Roboflow(api_key=api_key)
     project = rf.workspace(ROBOFLOW_WORKSPACE).project(ROBOFLOW_PROJECT)
@@ -52,7 +52,9 @@ def main() -> int:
         return 1
     latest = versions[0]
     print(f"Descargando version {latest.version} de {ROBOFLOW_PROJECT} en formato {ROBOFLOW_FORMAT}...")
-    latest.download(ROBOFLOW_FORMAT, location=str(DATASET_DETECTOR_DIR))
+    existing = list(DATASET_DETECTOR_DIR.glob("*")) if DATASET_DETECTOR_DIR.exists() else []
+    overwrite = len(existing) == 0
+    latest.download(ROBOFLOW_FORMAT, location=str(DATASET_DETECTOR_DIR), overwrite=overwrite)
     print(f"OK: dataset descargado en {DATASET_DETECTOR_DIR}")
     print("Siguiente paso: python src/data_prep/collapse_detector_classes.py")
     return 0

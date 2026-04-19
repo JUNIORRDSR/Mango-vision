@@ -15,6 +15,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # imagen completa, por lo cual solo se usa para clasificación.
 DATASET_MANGODHDS_ROOT = REPO_ROOT / "DatasetMango_YOLO"
 
+# Versión deduplicada y re-splitteada de MangoDHDS. Se genera con
+# dedup_and_resplit.py porque el split original tiene near-duplicates
+# cross-split que inflan las métricas de validación (ver README).
+# Ésta es la fuente real para entrenar el clasificador.
+DATASET_MANGODHDS_CLEAN = REPO_ROOT / "DatasetMango_YOLO_clean"
+
 # Espejo regenerado por make_cls_layout.py con layout de clasificación
 # esperado por Ultralytics: <root>/<split>/<class_name>/*.jpg
 DATASET_CLASSIFIER_ROOT = REPO_ROOT / "DatasetMango_YOLO_cls"

@@ -2,6 +2,8 @@
 
 Sistema de vision por computadora para detectar enfermedades en fruto de mango mediante una arquitectura en cascada de dos modelos YOLO. Sub-proyecto del Semillero TI de la Universidad Libre seccional Barranquilla.
 
+> Guia paso a paso end-to-end (setup, datos, entrenamiento, parametros, errores comunes): [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
+
 ## Arquitectura en cascada
 
 ```
@@ -27,7 +29,8 @@ Cada recorte de mango se redimensiona y pasa al clasificador. El color del bbox 
 
 ```
 Mango-vision/
-|-- DatasetMango_YOLO/            # MangoDHDS local (versionado)
+|-- DatasetMango_YOLO/            # MangoDHDS local raw (versionado)
+|-- DatasetMango_YOLO_clean/      # MangoDHDS deduplicado y re-splitteado (regenerado, no versionado)
 |-- DatasetMango_YOLO_cls/        # layout de clasificacion (regenerado, no versionado)
 |-- DatasetMango_Detector/        # dataset de Luigui Cerna (descargado, no versionado)
 |-- DatasetMango_Propias/         # test externo anotado por el usuario (no versionado)
@@ -53,6 +56,31 @@ Mango-vision/
 ## Datasets
 
 **MangoDHDS** (local, versionado). Fuente: Mendeley, licencia CC BY 4.0. Procesado a formato YOLO en `DatasetMango_YOLO/` con 5 clases: `Saludable`, `Antracnosis`, `Cancro_bacteriano`, `Costras`, `Podredumbre_Extremo_tallo`. Todas las anotaciones son bboxes de imagen completa (`cls 0.5 0.5 1.0 1.0`), por eso se usa para clasificacion, no deteccion.
+
+### Fuga de datos en MangoDHDS y re-split
+
+Al correr `src/data_prep/check_leakage.py` sobre `DatasetMango_YOLO/` (umbral `imagehash.phash` Hamming < 5) se detectaron **76 pares near-duplicate cross-split** entre `train`, `valid` y `test`. La mayoria con distancia `0`, es decir imagenes perceptualmente identicas repartidas entre splits con nombres distintos (por ejemplo `He105.jpg` en train y `He70.jpg` en valid apuntan a la misma foto).
+
+Entrenar directamente sobre ese split invalida la evaluacion: el modelo memoriza imagenes vistas en entrenamiento y las vuelve a ver en validacion, de modo que las metricas reportadas no reflejan generalizacion.
+
+**Mitigacion aplicada.** `src/data_prep/dedup_and_resplit.py` regenera el dataset:
+
+1. Hashea todas las imagenes con `imagehash.phash`.
+2. Construye clusters con union-find conectando pares con Hamming < 5.
+3. Trata cada cluster como unidad atomica y hace **stratified split por clase** (70 / 15 / 15) con `seed=42` sobre los clusters.
+4. Escribe la version limpia en `DatasetMango_YOLO_clean/` con la misma estructura `split/{images,labels}/`.
+
+El clasificador se entrena sobre `DatasetMango_YOLO_clean/` (configurado en `src/utils/config.py` via `DATASET_MANGODHDS_CLEAN` y consumido por `src/training/make_cls_layout.py`). `DatasetMango_YOLO/` permanece como fuente historica no usada en entrenamiento.
+
+**Flujo de preparacion del clasificador:**
+
+```bash
+python src/data_prep/check_leakage.py                                  # 1. reporta fuga sobre el split original
+python src/data_prep/dedup_and_resplit.py                              # 2. genera DatasetMango_YOLO_clean
+python src/data_prep/check_leakage.py --root DatasetMango_YOLO_clean   # 3. valida 0 pares cross-split
+```
+
+El paso 3 debe imprimir `OK: no se encontraron duplicados entre splits` y salir con codigo 0.
 
 **Clasificacion de Mangos** (Luigui Cerna, Roboflow Universe). Licencia CC BY 4.0. ~1334 imagenes en campo abierto. Las dos clases originales (`Mango Exportable`, `Mango Industrial`) se colapsan a una sola clase `mango` para el Modelo 1.
 
@@ -177,6 +205,7 @@ Muestrea cada 15 frames y descarta duplicados por perceptual hash. Util para ali
 ## Limitaciones conocidas
 
 - **Bboxes sinteticos en MangoDHDS.** Todas las labels son imagen completa. Por eso el Modelo 2 se entrena en modo clasificacion, no deteccion.
+- **Fuga cross-split en el MangoDHDS original.** 76 pares de imagenes near-duplicate repartidas entre train/valid/test. Se mitiga regenerando el dataset con `dedup_and_resplit.py` (ver seccion "Fuga de datos en MangoDHDS y re-split"). El entrenamiento del clasificador se corre siempre sobre `DatasetMango_YOLO_clean/`.
 - **Sesgo out-of-distribution.** Los datasets publicos estan tomados en condiciones controladas. En campo abierto la precision bajara hasta que haya fine-tuning con datos propios.
 - **Detector de una sola clase.** El Modelo 1 solo localiza mangos; el diagnostico depende enteramente del Modelo 2 y de los crops.
 - **Confianzas heterogeneas entre modelos.** `--conf-det` y `--conf-cls` se ajustan por separado en `config.py`.

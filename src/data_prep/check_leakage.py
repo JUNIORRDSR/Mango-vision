@@ -1,15 +1,18 @@
-"""Detecta fuga de datos entre splits de MangoDHDS usando perceptual hash.
+"""Detecta fuga de datos entre splits de un dataset YOLO usando perceptual hash.
 
 Compara las imágenes de train/valid/test por pares de splits. Si encuentra
 pares con distancia Hamming < 5 sobre `imagehash.phash`, imprime la lista
 y sale con código 1. No intenta arreglar nada automáticamente.
 
-Uso:
-    python src/data_prep/check_leakage.py
+Por defecto analiza DatasetMango_YOLO/. Para validar el dataset limpio
+generado por dedup_and_resplit.py:
+
+    python src/data_prep/check_leakage.py --root DatasetMango_YOLO_clean
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from itertools import combinations
 from pathlib import Path
@@ -18,7 +21,7 @@ import imagehash
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.utils.config import DATASET_MANGODHDS_ROOT
+from src.utils.config import DATASET_MANGODHDS_ROOT, REPO_ROOT
 
 HASH_THRESHOLD = 5
 SPLITS = ("train", "valid", "test")
@@ -39,10 +42,20 @@ def hash_split(root: Path, split: str) -> dict[Path, imagehash.ImageHash]:
 
 
 def main() -> int:
-    print(f"Analizando {DATASET_MANGODHDS_ROOT}...")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=DATASET_MANGODHDS_ROOT,
+        help="Carpeta raiz del dataset a analizar (default: DatasetMango_YOLO).",
+    )
+    args = parser.parse_args()
+    root = args.root if args.root.is_absolute() else (REPO_ROOT / args.root).resolve()
+
+    print(f"Analizando {root}...")
     per_split: dict[str, dict[Path, imagehash.ImageHash]] = {}
     for split in SPLITS:
-        per_split[split] = hash_split(DATASET_MANGODHDS_ROOT, split)
+        per_split[split] = hash_split(root, split)
         print(f"  {split}: {len(per_split[split])} imagenes hasheadas")
 
     duplicates: list[tuple[str, str, Path, Path, int]] = []

@@ -23,7 +23,16 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from src.utils.config import CLASSES, DATASET_CLASSIFIER_ROOT, DATASET_MANGODHDS_ROOT
+from src.utils.config import (
+    CLASSES,
+    DATASET_CLASSIFIER_ROOT,
+    DATASET_MANGODHDS_CLEAN,
+)
+
+# Se usa la versión deduplicada y re-splitteada de MangoDHDS. El split
+# original (DATASET_MANGODHDS_ROOT) tiene leakage cross-split detectada
+# por check_leakage.py; ver README sección "Fuga de datos en MangoDHDS".
+DATASET_CLS_SOURCE = DATASET_MANGODHDS_CLEAN
 
 # En Ultralytics classify, el split de validacion se llama 'val' por defecto.
 SPLIT_MAP = {"train": "train", "valid": "val", "test": "test"}
@@ -43,10 +52,13 @@ def link_or_copy(src: Path, dst: Path) -> None:
 
 
 def build_split(src_split: str, dst_split: str) -> int:
-    src_images = DATASET_MANGODHDS_ROOT / src_split / "images"
-    src_labels = DATASET_MANGODHDS_ROOT / src_split / "labels"
+    src_images = DATASET_CLS_SOURCE / src_split / "images"
+    src_labels = DATASET_CLS_SOURCE / src_split / "labels"
     if not src_images.is_dir() or not src_labels.is_dir():
-        raise FileNotFoundError(f"Faltan carpetas en {DATASET_MANGODHDS_ROOT / src_split}")
+        raise FileNotFoundError(
+            f"Faltan carpetas en {DATASET_CLS_SOURCE / src_split}. "
+            "Corre primero: python src/data_prep/dedup_and_resplit.py"
+        )
 
     n = 0
     for img in sorted(src_images.iterdir()):
